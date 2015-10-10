@@ -21,7 +21,8 @@ Cliente:
    mensagens.(O python tem uma biblioteca para isso)
 * Deve lidar com mensagens enviadas pelo servidor. (Como solicitação de partida, Informação de deconexão ???)
 * Deve lidar com mensagens enviadas por outros clientes.
-((Um possível esquema de implementação)** Estados:
+((Um possível esquema de implementação)
+** Estados:
 *** Inicial(Cliente <- Prompt(Usuário))
     Aceita apenas o comando de login. (As opções udf e tcp influenciam no uso de TLS nesse caso)
 *** Aguardando resposta do servidor(Cliente <- Socket(Servidor))
