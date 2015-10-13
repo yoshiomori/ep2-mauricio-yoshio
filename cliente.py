@@ -9,8 +9,10 @@ conexao = Conexao(argv[1], argv[2], int(argv[3]))
 deslogado = Deslogado(conexao)
 logado = Logado(conexao)
 estado = 'deslogado'
-while estado is not 'morto':
-    if estado is 'deslogado':
-        estado = deslogado.cmdloop()
-    elif estado is 'logado':
-        estado = logado.cmdloop()
+while estado != 'morto':
+    if estado == 'deslogado':
+        estado = deslogado.rodando()
+    elif estado == 'logado':
+        estado = logado.rodando()
+    else:
+        raise RuntimeError('Estado desconhecido.')

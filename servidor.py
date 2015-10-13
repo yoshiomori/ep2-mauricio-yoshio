@@ -1,37 +1,20 @@
-import socket
 from threading import Thread
-
-HOST = ''
-PORT = 50007
+from biblioteca_servidor import GerenciadorConexão
 
 
-# Essa função roda em cada thread
-def tcp_echo(conn, addr):
-    print('Connected by ', addr)
-    data = conn.recv(1024)
-    conn.sendall(data)
-    conn.close()
-
-
-def tcp_server():
-    s = socket.socket()
-    s.bind((HOST, PORT))
-    s.listen(1)
-    while True:
-        conn, addr = s.accept()
-        Thread(target=tcp_echo, args=(conn, addr)).start()  # Cada conexão estabelecida gera uma thread
-
-
-def udp_server():
-    s = socket.socket(type=socket.SOCK_DGRAM)
-    s.bind((HOST, PORT))
+def server(gerenciador_conexão):
+    def echo():  # Essa função roda para cada novo cliente conectado
+        print(conn)
+        data = conn.recebe()
+        conn.envia(data)
+        # conn.close()
+    nicknames = ['velha', 'dr3m', 'maisum']  # nickname é um identificador
+    senhas = ['123', 'daf', '25jan90']
+    estados = ['deslogado', 'deslogado', 'deslogado']
     while True:  # Servidor udp não precisa de threads pois lida da mesma forma cada pacote
-        data, addr = s.recvfrom(1024)
-        print('Connected by ', addr)
-        s.sendto(data, addr)
+        conn = gerenciador_conexão.aceita()
+        Thread(target=echo, args=(conn,)).start()  # Cada conexão estabelecida gera uma thread
 
 
-tcp_thread = Thread(target=tcp_server)
-udp_thread = Thread(target=udp_server)
-tcp_thread.start()
-udp_thread.start()
+Thread(target=server, args=(GerenciadorConexão('tcp', 50007),)).start()  # Iniciando servidor tcp
+server(GerenciadorConexão('udp', 50007))  # Iniciando servidor udp
