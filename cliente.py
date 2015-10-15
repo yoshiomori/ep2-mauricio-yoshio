@@ -1,18 +1,15 @@
 from sys import argv
-from biblioteca_cliente import Conexao, Deslogado, Logado
+from biblioteca_cliente import Conexão
 
 
-if len(argv) < 4:
-    raise RuntimeError('Falta argumentos!')
-
-conexao = Conexao(argv[1], argv[2], int(argv[3]))
-deslogado = Deslogado(conexao)
-logado = Logado(conexao)
-estado = 'deslogado'
-while estado != 'morto':
-    if estado == 'deslogado':
-        estado = deslogado.rodando()
-    elif estado == 'logado':
-        estado = logado.rodando()
-    else:
-        raise RuntimeError('Estado desconhecido.')
+def cliente():
+    if len(argv) < 4:
+        raise RuntimeError('Falta argumentos!')
+    conexão = Conexão(argv[1], argv[2], int(argv[3]))
+    while True:
+        mensagem = input('> ')
+        conexão.envia(mensagem)
+        resposta = conexão.recebe()
+        print(resposta)
+if __name__ == '__main__':
+    cliente()

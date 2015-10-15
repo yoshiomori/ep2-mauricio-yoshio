@@ -1,79 +1,76 @@
 from socket import socket, SOCK_DGRAM
-from threading import Thread, Semaphore
+from threading import Semaphore
 
 
-class GerenciadorConexão(object):
-    def __init__(self, tipo, porta):
-        if tipo == 'tcp':
-            s = socket()
-            s.bind(('', porta))
-            s.listen(1)
+class ConexãoTCP(object):
+    def __init__(self, conexão, endereço):
+        self.conexão = conexão
+        self.endereço = endereço
 
-            def aceita():
-                conexão_socket, endereco = s.accept()
-                conexão = object()
+    def recebe(self):
+        return self.conexão.recv(1024).decode()
 
-                def recebe():
-                    mensagem = conexão_socket.recv(1024)
-                    return mensagem.decode()
-                conexão.recebe = recebe
+    def envia(self, mensagem):
+        self.conexão.send(mensagem.encode('unicode_escape'))
 
-                def envia(mensagem):
-                    conexão_socket.send(mensagem.encode('unicode_escape'))
-                conexão.envia = envia
-                return conexão
-            self.aceita = aceita
-        elif tipo == 'udp':
-            s = socket(type=SOCK_DGRAM)
-            s.bind(('', porta))
+    def fecha(self):
+        self.conexão.close()
 
-            endereços = []  # Guarda todos os endereços dos clientes que acessaram o servidor
-            dados_clientes = []  # Guarda todas as pilhas de dados_clientes enviados pelos clientes
-            tem_dados = []  # Guarda todos os semáforos que indicam se há dados_clientes na pilha.
-            dados_lidos = []  # Guarda a infomação que o dado foi lido para cada conexão
-            ultima_conexão = []  # Guarda a ultima conexão aceita
-            semaforo_escuta_foi_consumido = Semaphore()
-            semaforo_escuta_tem_produto = Semaphore()
 
-            def gerenciador():
-                while True:
-                    dado, endereço = s.recvfrom(1024)  # O gerenciador fica esperando novas conexões
-                    if endereço not in endereços:  # Trata mensagens provenientes de novos endereços
-                        endereços.append(endereço)
-                        dados_clientes.append(dado.decode())
-                        tem_dado = Semaphore()
-                        tem_dados.append(tem_dado)
-                        dado_lido = Semaphore()
-                        dados_lidos.append(dado_lido)
-                        i = len(dados_clientes) - 1
-                        conexao = object()  # criando uma nova conexão
+class GerenciadorTCP(object):
+    def __init__(self, porta):
+        self.socket = socket()
+        self.socket.bind(('', porta))
+        self.socket.listen(1)
 
-                        def recebe():  # Uma conexão tem esse método que recebe informações vindas do cliente.
-                            tem_dado.acquire()  # Uma conexão espera até ter um novo dado a ser lido
-                            d = dados_clientes[i]
-                            dado_lido.release()  # Uma conexão informa que o dado foi lido para o gerencidor
-                            return d
-                        conexao.recebe = recebe
+    def aceita(self):
+        conexão = ConexãoTCP(*self.socket.accept())
+        return conexão
 
-                        def envia(mensagem):
-                            s.sendto(mensagem.encode('unicode_escape'), endereço)
-                        conexao.envia = envia
-                        semaforo_escuta_foi_consumido.acquire()  # Fica esperando até a nova conexão ter sido processada
-                        ultima_conexão.append(conexao)
-                        semaforo_escuta_tem_produto.release()  # Indica que tem uma nova conexão para ser processada
-                    else:
-                        i = endereços.index(endereço)
-                        dados_lidos[i].acquire()  # O gerencidor fica esperando até o dado ter sido lido pela conexão
-                        dados_clientes[i].append(dado)
-                        tem_dados[i].release()  # Informa que há um novo dado para ser lido
-            Thread(target=gerenciador).start()
 
-            def aceita():
-                semaforo_escuta_tem_produto.acquire()  # Fica esperando até aparecer uma nova conexão a ser processada
-                conexão = ultima_conexão.pop()
-                semaforo_escuta_foi_consumido.release()  # Informa que a conexão foi processada
-                return conexão
-            self.aceita = aceita
+class GerenciadorUDP(object):
+    def __init__(self, porta):
+        self.socket = socket(type=SOCK_DGRAM)
+        self.socket.bind(('', porta))
+        # novo_dado[endereço] armazena a informação de que chegou um novo dado para o serviço do endereço correspondente
+        # dado_lido armazena a informação de que o último dado foi lido
+        # nova_conexão armazena a informação de que chegou uma nova conexão
+        # conexão_estabelecida armazenha a informação de que a última conexão foi estabelecida
+        global novo_dado, dado_lido
+        novo_dado = {}
+        dado_lido = Semaphore()
+        pass
+
+    def aceita(self):
+        # dado armazena a mensagem recebida no socket
+        global dado, novo_dado, dado_lido
+        while True:
+            dado_lido.acquire()
+            dado, endereço = self.socket.recvfrom(1024)
+            # Envia a mensagem que chegou no socket para o serviço do endereço correspondente
+            if endereço in novo_dado.keys():
+                novo_dado[endereço].release()
+            else:  # Ativa uma nova conexão
+                novo_dado[endereço] = Semaphore()
+                return ConexãoUDP(self.socket, endereço)
             pass
-        else:
-            raise RuntimeError('Tipo de conexão não suportado.')
+
+
+class ConexãoUDP(object):
+    def __init__(self, conexão, endereço):
+        self.conexão = conexão
+        self.endereço = endereço
+
+    def recebe(self):
+        global dado, novo_dado, dado_lido
+        novo_dado[self.endereço].acquire()
+        mensagem = dado.decode()
+        dado_lido.release()
+        return mensagem
+
+    def envia(self, mensagem):
+        self.conexão.sendto(mensagem.encode('unicode_escape'), self.endereço)
+
+    def fecha(self):
+        global novo_dado
+        novo_dado.pop(self.endereço)
