@@ -13,7 +13,7 @@ class ConexãoTCP(object):
     def envia(self, mensagem):
         self.conexão.send(mensagem.encode('unicode_escape'))
 
-    def fecha(self):
+    def encerra(self):
         self.conexão.close()
 
 
@@ -71,6 +71,6 @@ class ConexãoUDP(object):
     def envia(self, mensagem):
         self.conexão.sendto(mensagem.encode('unicode_escape'), self.endereço)
 
-    def fecha(self):
+    def encerra(self):
         global novo_dado
         novo_dado.pop(self.endereço)
