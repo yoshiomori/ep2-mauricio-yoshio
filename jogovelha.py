@@ -1,3 +1,6 @@
+#Considere que o ele trata uma matriz, mas na verdade é um vetor. m é o número de linhas e n é o número de colunas,
+#eu considerei que o usuário será bonzinho e não colocará X ou O ou de já foi preenchido! Usuário honesto
+
 from sys import exit
 #Cria uma matriz do jogo da velha, por default os espacos
 #sao preenchidos com +
