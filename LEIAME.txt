@@ -1,0 +1,52 @@
+EP2 - Data de Entraga 16/10/2015
+Dupla:	Mauricio Tavares Ozaki
+	YOshio Mori
+
+1. Arquivos
+
+Nosso EP possui, além deste LEIAME, os seguintes arquivos:
+
+- biblioteca_cliente.py
+- biblioteca_servidor.py
+- cliente.py
+- servidor.py
+- jogovelha.py
+- .pdf
+
+2. Execução do EP
+
+Nosso ep utiliza o principio básico do cliente servidor, na hora de rodar o cliente, é necessário fornecer o IP do servidor, a porta e o tipo de conexão, TCP pu UDP, por exemplo:
+
+>python3 cliente.py udp localhost 50007
+
+Já para o servidor, é necessário fornecer a porta, por exemplo:
+
+>python3 servidor.py 50007
+
+
+3. Código
+
+3.1. servidor.py
+
+Possui armazenada alguns logins já cadastrados inicialmente. Aqui o servidor é responsável por verificar se o usuário está jogando, assim como interpretar os comandos do cliente em relação ao jogo.
+Outra função importante é verificar se os usuários ainda estão conectados aos servidor ou se caíram. 
+
+
+3.2. biblioteca_servidor.py
+
+Interpreta os dados passados no argumento na hora da execução. Verifica se a conexão é TCP ou UDP.
+
+
+3.3. cliente.py
+
+Conforme dito na seção 2, é esperado 4 argumentos na sua execução. Ao conectar corretamente, uma mensagem de boas vindas será exibida, indicando que já é possível interagir com o servidor.
+Temos alguns usuários, é possível fazer login com:
+>login velha
+>senha 123
+Além destes comandos, existe também a opção de sair do servidor:
+>servidor 
+
+
+3.4. biblioteca_cliente.py
+
+Neste arquivo, temos a classe Conexão, responsável por verificar se os dados como IP, tipo de conexão e porta foram passados corretamente. É responsável também por interpretar os comandos passados pelo cliente.py.
