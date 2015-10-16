@@ -1,6 +1,6 @@
 from threading import Thread, Semaphore
 from biblioteca_servidor import GerenciadorTCP, GerenciadorUDP
-from time import sleep, localtime
+from time import sleep, localtime, ctime
 
 
 usuários = ['velha', 'dr3m', 'maisum']  # nickname é um identificador
@@ -27,6 +27,7 @@ def chegou_ping(argumento):
 def interpreta_deslogado(mensagem):
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'deslogado'
+    mensagem = 'resposta 14'
     i = -1
     if comando == 'login':
         if argumento in usuários:
@@ -58,13 +59,27 @@ def interpreta_deslogado(mensagem):
     return mensagem, próximo_estado, i
 
 
-def interpreta_autenticando(mensagem, i):
+def interpreta_autenticando(mensagem, i, conn, j, jid):
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'autenticando'
+    mensagem = 'resposta 14'
     if comando == 'senha':
         if argumento == senhas[i]:
-            mensagem = 'resposta 7'
-            estados[i] = próximo_estado = 'logado' if estados[i] != 'jogando e desconectado' else 'jogando'
+            if estados[i] != 'jogando e desconectado':
+                mensagem = 'resposta 7'
+                estados[i] = próximo_estado = 'logado'
+            else:
+                mensagem = 'resposta 15'
+                estados[i] = próximo_estado = 'jogando'
+                for k in jogos.keys():
+                    if i in jogos[k]:
+                        jid = k
+                        j = jogos[k][1] if jogos[k][1] != i else jogos[k][2]
+                        conexões[j].envia('resposta_argumento 6 %s' % usuários[i])
+                        conexões[j].envia('voltei')
+            conexões[i] = conn
+        else:
+            mensagem = 'resposta 16'
     elif comando == 'sair':
         mensagem = 'resposta 6'
         próximo_estado = 'fim'
@@ -73,12 +88,13 @@ def interpreta_autenticando(mensagem, i):
     else:
         mensagem = 'resposta 0'
         pass
-    return mensagem, próximo_estado
+    return mensagem, próximo_estado, j, jid
 
 
 def interpreta_cadastrando(mensagem, i):
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'cadastrando'
+    mensagem = 'resposta 14'
     if comando == 'senha':
         senhas[i] = argumento
         pass
@@ -97,10 +113,10 @@ def interpreta_cadastrando(mensagem, i):
     return mensagem, próximo_estado
 
 
-def interpreta_logado(mensagem, i):
+def interpreta_logado(mensagem, i, j):
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'logado'
-    j = -1
+    mensagem = 'resposta 14'
     if comando == 'listar':
         mensagem = 'respostaLista '
         mensagem += 'usuario-estado '
@@ -112,12 +128,18 @@ def interpreta_logado(mensagem, i):
             j = usuários.index(argumento)
             if j != i and estados[j] == 'logado':
                 mensagem = 'resposta 8'
-                conexões[j].envia('resposta_argumento 2 %s' % usuários[i])
                 próximo_estado = estados[i] = 'aguardando jogador'
-                estados[j] = 'aguardando resposta'
+                conexões[j].envia('resposta_argumento 2 %s' % usuários[i])
+                conexões[j].envia('convite %d' % i)  # Para convidar é preciso apresentar sua identificação
             else:
                 mensagem = 'resposta 2'
+        else:
+            mensagem = 'resposta 2'
         pass
+    elif comando == 'convite':
+        mensagem = 'resposta 14'
+        próximo_estado = estados[i] = 'aguardando resposta'
+        j = int(argumento)
     elif comando == 'fame':
         fame = list(zip(pontos, usuários))
         fame.sort(key=lambda x: x[0])
@@ -138,26 +160,40 @@ def interpreta_logado(mensagem, i):
     return mensagem, próximo_estado, j
 
 
-def interpreta_jogando(mensagem, i, j):
+def interpreta_jogando(mensagem, i, j, jid):
     comando, sep, argumento = mensagem.partition(' ')
+    próximo_estado = 'jogando'
+    mensagem = 'resposta 14'
     if comando == 'mostre':
         pass
     elif comando == 'marcar':
         pass
     elif comando == 'sair':
         mensagem = 'resposta 12'
-        if
+        estados[i] = 'logado'
+        próximo_estado = 'logado'
+        conexões[j].envia('respota_argumento 1 %s' % usuários[i])
+        conexões[j].envia('jogo_cancelado')
+    elif comando == 'cancelar':
+        mensagem = 'resposta 13'
+        estados[i] = 'logado'
+        próximo_estado = 'logado'
+        # TODO: marcar pontuação antes de destruir o jogo
+        jogos.pop(jid)
+    elif comando == 'espera_voltar':
+        próximo_estado = 'espera voltar'
     elif comando == 'pong':
         chegou_ping(argumento)
     else:
         mensagem = 'resposta 0'
         pass
-    return mensagem, 'jogando'
+    return mensagem, próximo_estado
 
 
-def interpreta_aguardando_jogador(mensagem, i, j):
+def interpreta_aguardando_jogador(mensagem, i, j, jid):
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'aguardando jogador'
+    mensagem = 'resposta 14'
     if comando == 'listar':
         mensagem = 'respostaLista '
         for j, usuário in enumerate(usuários):
@@ -170,60 +206,94 @@ def interpreta_aguardando_jogador(mensagem, i, j):
         for ponto, usuário in fame:
             mensagem += "%s-%d " % (usuário, ponto)
         pass
+    elif comando == 'jogo_aceito':
+        mensagem = 'resposta 14'
+        próximo_estado = estados[i] = 'jogando'
+        jid = int(argumento)
     elif comando == 'sair':
-        mensagem = 'resposta 6'
-        conexões[i] = None
+        mensagem = 'resposta 12'
+        estados[i] = 'logado'
+        próximo_estado = 'logado'
         conexões[j].envia('respota_argumento 1 %s' % usuários[i])
-        estados[i] = 'deslogado'
-        próximo_estado = 'fim'
-        estados[j] = 'logado'
+        conexões[j].envia('jogo_cancelado')
+    elif comando == 'cancelar':
+        mensagem = 'resposta 13'
+        estados[i] = 'logado'
+        próximo_estado = 'logado'
     elif comando == 'pong':
         chegou_ping(argumento)
     else:
         mensagem = 'resposta 0'
         pass
-    return mensagem, próximo_estado
+    return mensagem, próximo_estado, jid
 
 
-def interpreta_aguardando_resposta(mensagem, i, j):
+def interpreta_aguardando_resposta(mensagem, i, j, jid):
+    global jogo_id
     comando, sep, argumento = mensagem.partition(' ')
     próximo_estado = 'aguardando resposta'
+    mensagem = 'resposta 14'
     if comando == 'sim':
         mensagem = 'resposta 9'
-        conexões[j].envia('resposta_argumento 5 %s' % usuários[i])
-        estados[i] = estados[j] = próximo_estado = 'jogando'
-        # TODO: Instanciando um jogo
+        estados[i] = próximo_estado = 'jogando'
+        usando_jogo_id.acquire()
+        jid = jogo_id
+        jogo_id += 1
+        usando_jogo_id.release()
+        # TODO: Instanciando um jogo no None
+        jogos[jogo_id] = [None, i, j]
+        conexões[j].envia('resposta_argumento 4 %s' % usuários[i])
+        conexões[j].envia('jogo_aceito %d' % jid)  # O jogo é criado pelo convidado e é enviado para o outro jogado
     elif comando == 'não':
         mensagem = 'resposta 10'
+        estados[i] = próximo_estado = 'logado'
         conexões[j].envia('resposta_argumento 3 %s' % usuários[i])
-        estados[i] = estados[j] = próximo_estado = 'logado'
+        conexões[j].envia('jogo_cancelado')
+    elif comando == 'cancelar':
+        mensagem = 'resposta 13'
+        estados[i] = 'logado'
+        próximo_estado = 'logado'
     elif comando == 'pong':
         chegou_ping(argumento)
-    elif comando == 'sair':
-        mensagem = 'resposta 6'
-        próximo_estado = 'fim'
-        estados[i] = 'deslogado'
-        conexões[i] = None
-        conexões[j].envia('resposta_argumento 4 %s' % usuários[i])
-        estados[j] = 'logado'
-        pass
     else:
         mensagem = 'resposta 0'
         pass
-    return mensagem, próximo_estado
+    return mensagem, próximo_estado, jid
+
+
+def interpreta_espera_voltar(mensagem, i, j, jid):
+    comando, sep, argumento = mensagem.partition(' ')
+    próximo_estado = 'espera voltar'
+    mensagem = 'resposta 14'
+    if comando == 'cancelar':
+        mensagem = 'resposta 13'
+        próximo_estado = estados[i] = 'logado'
+        if estados[i] == 'jogando':  # Destruindo jogo
+            # TODO: marcar pontuação antes de destruir o jogo
+            jogos.pop(jid)
+        estados[j] = 'deslogado'
+    elif comando == 'voltei':
+        mensagem = 'resposta 15'
+        próximo_estado = estados[i] = 'jogando'
+    elif comando == 'pong':
+        chegou_ping(argumento)
+    else:
+        mensagem = 'resposta 0'
+    return mensagem, próximo_estado, jid
 
 
 def serviço(conn):  # Essa função roda para cada novo cliente conectado
     global conexões, numero_ping, pings, estados
     log = open('%d-%d-%d.log' % (lt.tm_year, lt.tm_mon, lt.tm_mday), 'a', newline='\n')
-    log.write('Cliente {} conectou!\n'.format(conn.endereço))
+    log.write('[{}]Cliente {} conectou!\n'.format(ctime(), conn.endereço))
     conn.envia('resposta 11')
     estado = 'deslogado'
     j = -1
     i = -1
+    jid = -1
 
     def heartbeat():
-        nonlocal estado
+        nonlocal estado, j
         global pings, numero_ping
         no_ping.acquire()
         meu_ping = numero_ping
@@ -238,64 +308,77 @@ def serviço(conn):  # Essa função roda para cada novo cliente conectado
             if not pings[meu_ping]:
                 if estado == 'logado':
                     estados[i] = 'deslogado'
-                    log.write('Cliente {}, logado como {}, perdeu a conexão\n'.format(conn.endereço, usuários[i]))
+                    log.write('[{}]Cliente {}, logado como {}, perdeu a conexão\n'.format(ctime(), conn.endereço,
+                                                                                          usuários[i]))
                 elif estado == 'jogando':
+                    conexões[j].envia('resposta_argumento 5 %s' % usuários[i])
+                    conexões[j].envia('espera_voltar')
                     estados[i] = 'jogando e desconectado'
-                    log.write('Cliente {}, logado como {}, perdeu a conexão e estava jogando com {}\n'.format(
-                        conn.endereço, usuários[i], usuários[j]))
+                    log.write('[{}]Cliente {}, logado como {}, perdeu a conexão e estava jogando com {}\n'.format(
+                        ctime(), conn.endereço, usuários[i], usuários[j]))
                 elif estado == 'cadastrando':
                     usuários.pop(i)
                     senhas.pop(i)
                     estados.pop(i)
                     conexões.pop(i)
-                    log.write('Cliente {} perdeu a conexão e não consegui cadastrar {}\n'.format(conn.endereço,
-                                                                                               usuários[i]))
+                    log.write('[{}]Cliente {} perdeu a conexão e não consegui cadastrar {}\n'.format(ctime(),
+                                                                                                     conn.endereço,
+                                                                                                     usuários[i]))
                 elif estado == 'aguardando jogador':
                     conexões[i] = None
                     conexões[j].envia('respota_argumento 0 %s' % usuários[i])
                     estados[i] = 'deslogado'
-                    estados[j] = 'logado'
-                    log.write('Cliente {}, logado como {}, perdeu a conexão e o jogo com {} foi cancelado\n'.format(
-                        conn.endereço, usuários[i], usuários[j]))
+                    conexões[j].envia('jogo_cancelado')
+                    log.write('[{}]Cliente {}, logado como {}, perdeu a conexão e o jogo com {} foi cancelado\n'.format(
+                        ctime(), conn.endereço, usuários[i], usuários[j]))
                 elif estado == 'aguardando resposta':
                     estados[i] = 'deslogado'
                     conexões[i] = None
                     conexões[j].envia('respota_argumento 0 %s' % usuários[i])
-                    estados[j] = 'logado'
-                    log.write('Cliente {}, logado como {}, perdeu a conexão e o jogo com {} foi cancelado\n'.format(
-                        conn.endereço, usuários[i], usuários[j]))
+                    conexões[j].envia('jogo_cancelado')
+                    log.write('[{}]Cliente {}, logado como {}, perdeu a conexão e o jogo com {} foi cancelado\n'.format(
+                        ctime(), conn.endereço, usuários[i], usuários[j]))
                 estado = 'fim'
         pings.pop(meu_ping)
 
     def interpreta_cliente():
-        nonlocal estado, conn, i, j
+        nonlocal estado, conn, i, j, jid
         while estado != 'fim':  # estado guarda o estado atual do serviço
             mensagem = conn.recebe()
             if estado == 'deslogado':
-                log.write('Cliente {} enviou {}\n'.format(conn.endereço, mensagem))
+                log.write('[{}]Cliente {} enviou {}\n'.format(ctime(), conn.endereço, mensagem))
                 mensagem, estado, i = interpreta_deslogado(mensagem)
             elif estado == 'autenticando':
-                mensagem, estado = interpreta_autenticando(mensagem, i)
+                mensagem, estado, j, jid = interpreta_autenticando(mensagem, i, conn, j, jid)
             elif estado == 'cadastrando':
                 mensagem, estado = interpreta_cadastrando(mensagem, i)
             elif estado == 'logado':
-                log.write('Cliente {}, logado como {}, enviou {}\n'.format(conn.endereço, usuários[i], mensagem))
-                conexões[i] = conn
-                mensagem, estado, j = interpreta_logado(mensagem, i)
+                log.write('[{}]Cliente {}, logado como {}, enviou {}\n'.format(ctime(), conn.endereço, usuários[i],
+                                                                               mensagem))
+                mensagem, estado, j = interpreta_logado(mensagem, i, j)
             elif estado == 'jogando':
-                log.write('Cliente {}, logado como {} e em jogo com {}, enviou {}\n'.format(conn.endereço, usuários[i],
-                                                                                            usuários[j], mensagem))
-                mensagem, estado = interpreta_jogando(mensagem, i, j)
+                log.write('[{}]Cliente {}, logado como {} e em jogo com {}, enviou {}\n'.format(ctime(), conn.endereço,
+                                                                                                usuários[i],
+                                                                                                usuários[j], mensagem))
+                mensagem, estado = interpreta_jogando(mensagem, i, j, jid)
             elif estado == 'aguardando jogador':
-                log.write('Cliente {}, logado como {}, enviou {} e está aguardando {}\n'.format(conn.endereço,
-                                                                                                usuários[i], mensagem,
-                                                                                                usuários[j]))
-                mensagem, estado = interpreta_aguardando_jogador(mensagem, i, j)
+                log.write('[{}]Cliente {}, logado como {}, enviou {} e está aguardando {}\n'.format(ctime(),
+                                                                                                    conn.endereço,
+                                                                                                    usuários[i],
+                                                                                                    mensagem,
+                                                                                                    usuários[j]))
+                mensagem, estado, jid = interpreta_aguardando_jogador(mensagem, i, j, jid)
             elif estado == 'aguardando resposta':
-                log.write('Cliente {}, logado como {}, enviou {} e deve responder ao {}\n'.format(conn.endereço,
-                                                                                                  usuários[i], mensagem,
-                                                                                                  usuários[j]))
-                mensagem, estado = interpreta_aguardando_resposta(mensagem, i, j)
+                log.write('[{}]Cliente {}, logado como {}, enviou {} e deve responder ao {}\n'.format(ctime(),
+                                                                                                      conn.endereço,
+                                                                                                      usuários[i],
+                                                                                                      mensagem,
+                                                                                                      usuários[j]))
+                mensagem, estado, jid = interpreta_aguardando_resposta(mensagem, i, j, jid)
+            elif estado == 'espera voltar':
+                log.write('[{}]Cliente {}, logado como {}, enviou {} e deve responder se espera o jogador {}'
+                          ' reestabelecer conexão\n'.format(ctime(), conn.endereço, usuários[i], mensagem, usuários[j]))
+                mensagem, estado, jid = interpreta_espera_voltar(mensagem, i, j, jid)
             else:
                 raise RuntimeError('Serviço entrou em um estado disconhecido.')
             conn.envia(mensagem)
@@ -303,7 +386,7 @@ def serviço(conn):  # Essa função roda para cada novo cliente conectado
     theartbeat = Thread(target=heartbeat)
     theartbeat.start()
     theartbeat.join()
-    log.write('Cliente {} desconectou!\n'.format(conn.endereço))
+    log.write('[{}]Cliente {} desconectou!\n'.format(ctime(), conn.endereço))
     log.close()
     conn.encerra()
 

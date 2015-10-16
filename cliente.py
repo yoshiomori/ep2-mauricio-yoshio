@@ -42,6 +42,14 @@ def interpreta_resposta(argumento):
         print('Bem vindo à casa Véia!')
     elif int(argumento) == 12:
         print('Saiu do jogo com sucesso!')
+    elif int(argumento) == 13:
+        print('Partida foi cancelada!')
+    elif int(argumento) == 14:
+        pass
+    elif int(argumento) == 15:
+        print('Devolta ao jogo!')
+    elif int(argumento) == 16:
+        print('Senha inválida!')
     else:
         print('Servidor enviou uma respota desconhecida')
         pass
@@ -59,9 +67,11 @@ def interpreta_resposta_argumento(argumento):
     elif int(num) == 3:
         print('%s rejeitou a partida!' % argumento)
     elif int(num) == 4:
-        print('%s saiu!' % argumento)
-    elif int(num) == 5:
         print('%s aceitou a partida! Você é o O' % argumento)
+    elif int(num) == 5:
+        print('%s perdeu a conexão! Digite cancelar se não quiser esperar.' % argumento)
+    elif int(num) == 6:
+        print('%s está de volta' % argumento)
     else:
         print('Servidor enviou uma resposta desconhecida')
 
@@ -82,5 +92,15 @@ def cliente():
             print(*argumento.split(), sep='\n')
         elif comando == 'resposta_argumento':
             interpreta_resposta_argumento(argumento)
+        elif comando == 'jogo_cancelado':
+            conexão.envia('cancelar')
+        elif comando == 'espera_voltar':
+            conexão.envia('espera_voltar')
+        elif comando == 'convite':
+            conexão.envia(comando + separador + argumento)
+        elif comando == 'jogo_aceito':
+            conexão.envia(comando + separador + argumento)
+        elif comando == 'voltei':
+            conexão.envia('voltei')
 if __name__ == '__main__':
     cliente()
